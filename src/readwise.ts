@@ -21,6 +21,8 @@ const resultsSchema = z.object({
   results: z.array(highlightsSchema),
 })
 
+export type Highlight = z.infer<typeof highlightsSchema>
+
 export const highlights = {
   get: async () => {
     const response = await fetch(`${DOMAIN}/highlights`, { headers })
