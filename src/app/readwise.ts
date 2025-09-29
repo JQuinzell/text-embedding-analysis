@@ -8,7 +8,7 @@ const headers = {
   Authorization: `Token ${authToken}`,
 }
 
-const highlightsSchema = z.object({
+export const highlightsSchema = z.object({
   id: z.number(),
   text: z.string(),
   book_id: z.number(),
