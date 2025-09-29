@@ -1,7 +1,10 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  serverComponentsExternalPackages: ['@tensorflow/tfjs-node'],
+  experimental: {
+    serverComponentsExternalPackages: ['@tensorflow/tfjs-node'],
+  },
 }
 
 export default nextConfig
