@@ -17,15 +17,21 @@ export const Highlight = ({ highlight }: Props) => {
         </h3>
         <button
           onClick={() => {
-            console.log(highlight.text)
-            highlight.relationships.slice(0, 5).forEach((relationship) => {
-              const relatedHighlight = highlightMap.get(
-                relationship.highlightId
-              )
-              if (relatedHighlight) {
-                console.log(relationship.similarity, relatedHighlight.text)
-              }
-            })
+            console.log('Highlight text:', highlight.text)
+
+            const relationshipsData = highlight.relationships
+              .slice(0, 5)
+              .map((relationship) => {
+                const relatedHighlight = highlightMap.get(
+                  relationship.highlightId
+                )
+                return {
+                  similarity: relationship.similarity,
+                  text: relatedHighlight?.text || 'Highlight not found',
+                }
+              })
+
+            console.table(relationshipsData)
           }}
           className='px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
         >
