@@ -2,10 +2,23 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { z } from 'zod'
-import { embedText } from './embeddings'
-import { type Highlight, highlights, highlightsSchema } from './readwise'
+import { embedText, similarity } from './embeddings'
+import {
+  type Highlight,
+  highlights as highlightsClient,
+  highlightsSchema,
+} from './readwise'
 
-const highlightsTableSchema = z.array(highlightsSchema)
+const highlightDataSchema = highlightsSchema.extend({
+  relationships: z.array(
+    z.object({
+      highlightId: z.number(),
+      similarity: z.number(),
+    })
+  ),
+})
+
+const highlightsTableSchema = z.array(highlightDataSchema)
 
 const ensureDir = (filePath: string) => {
   const dir = dirname(filePath)
@@ -19,20 +32,41 @@ type HighlightEmbedding = {
   embedding: number[]
 }
 
+export type HighlightData = z.infer<typeof highlightDataSchema>
+
 export const db = {
   highlights: {
     fileName: 'data/highlights.json',
-    get: async () => {
+    get: async (): Promise<HighlightData[]> => {
       if (!existsSync(db.highlights.fileName)) {
-        const res = await highlights.get()
-        await db.highlights.save(res.results)
-        return res.results
+        const res = await highlightsClient.get()
+        const embeddings = await db.embeddings.save(res.results)
+        const embeddingsMap = new Map(
+          embeddings.map((e) => [e.highlightId, e.embedding])
+        )
+        const highlights = res.results.map((highlight) => ({
+          ...highlight,
+          relationships: res.results
+            .map((h) => ({
+              highlightId: h.id,
+              similarity: similarity(
+                embeddingsMap.get(highlight.id)!,
+                embeddingsMap.get(h.id)!
+              ),
+            }))
+            .sort((a, b) => b.similarity - a.similarity)
+            .slice(1), // exclude the first relationship (the highlight itself)
+        }))
+        await db.highlights.save(highlights)
+        return highlights
       }
-      return highlightsTableSchema.parse(
+
+      const highlights = highlightsTableSchema.parse(
         JSON.parse(await readFile(db.highlights.fileName, 'utf-8'))
       )
+      return highlights
     },
-    save: async (highlights: Highlight[]) => {
+    save: async (highlights: HighlightData[]) => {
       ensureDir(db.highlights.fileName)
       await writeFile(
         db.highlights.fileName,
@@ -44,18 +78,20 @@ export const db = {
     fileName: 'data/embeddings.json',
     get: async () => {
       if (!existsSync(db.embeddings.fileName)) {
+        await db.embeddings.save([])
         return []
       }
       return JSON.parse(
         await readFile(db.embeddings.fileName, 'utf-8')
       ) as HighlightEmbedding[]
     },
-    save: async (highlights: Highlight[]) => {
+    save: async (highlights: Highlight[]): Promise<HighlightEmbedding[]> => {
       const embeddings = await Promise.all(
         highlights.map(async (highlight) => {
+          const [embedding] = await embedText(highlight.text)
           return {
             highlightId: highlight.id,
-            embedding: await embedText(highlight.text),
+            embedding,
           }
         })
       )
@@ -64,6 +100,7 @@ export const db = {
         db.embeddings.fileName,
         JSON.stringify(embeddings, null, 2)
       )
+      return embeddings
     },
   },
 }
